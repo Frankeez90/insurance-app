@@ -153,7 +153,23 @@ with tab2:
     
     fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=True)
     st.plotly_chart(fig_radar, use_container_width=True)
+# --- 保存功能 ---
+st.subheader("💾 保存档案")
 
+# 准备要下载的数据
+csv_data = df.to_csv(index=False).encode('utf-8')
+
+# 生成文件名 (使用客户名字 + 产品名)
+file_name_download = f"{name_a}_vs_{name_b}_对比报告.csv"
+
+st.download_button(
+    label="📥 下载对比报告 (CSV/Excel)",
+    data=csv_data,
+    file_name=file_name_download,
+    mime='text/csv',
+    help="点击下载后，文件将保存到您的设备中，可用 Excel 打开。"
+)
 # --- 结语 ---
 st.markdown("---")
 st.caption("注：此工具仅用于辅助演示，具体利益请以 Allianz 或相关保险合同为准。")
+
