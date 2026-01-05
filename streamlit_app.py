@@ -1,144 +1,214 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 
-# --- 页面配置 ---
-st.set_page_config(page_title="保险方案对比神器", page_icon="🛡️", layout="wide")
-
-# --- 侧边栏：客户与产品信息 ---
-st.sidebar.title("🛡️  E&S Agency 工具箱")
-
-# 1. 新增：客户资料录入
-st.sidebar.header("👤 客户档案 (Client Profile)")
-client_name = st.sidebar.text_input("客户姓名", placeholder="例如: Mr. Frankeez")
-client_age = st.sidebar.number_input("客户年龄", min_value=0, max_value=100, value=30)
-client_gender = st.sidebar.selectbox("性别", ["男", "女"])
-consultant_name = st.sidebar.text_input("顾问名字", value="Frankeez Lee")
-
-st.sidebar.markdown("---")
-
-# 2. 保单数据输入
-st.sidebar.header("📝 输入保单信息")
-
-def user_input_features(label_suffix):
-    st.sidebar.subheader(f"方案 {label_suffix}")
-    # 让用户可以输入具体的产品名，例如 "HealthAssured"
-    default_name = f"Allianz 方案 {label_suffix}"
-    name = st.sidebar.text_input(f"产品名称 ({label_suffix})", value=default_name, key=f"name_{label_suffix}")
-    type_ = st.sidebar.selectbox(f"险种类型 ({label_suffix})", ["医疗卡 (Medical)", "人寿 (Life)", "重疾 (CI)", "储蓄 (Savings)"], key=f"type_{label_suffix}")
-    
-    premium = st.sidebar.number_input(f"年缴保费 RM ({label_suffix})", min_value=0, value=3000, key=f"prem_{label_suffix}")
-    years = st.sidebar.number_input(f"缴费年限 ({label_suffix})", min_value=1, value=20, key=f"year_{label_suffix}")
-    coverage = st.sidebar.number_input(f"保障额度 RM ({label_suffix})", min_value=0, value=500000, help="可以是年度限额或人寿保额", key=f"cov_{label_suffix}")
-    cash_value = st.sidebar.number_input(f"预估现金价值/无理赔奖励 RM ({label_suffix})", min_value=0, value=0, help="填入Cash Value 或 NCB", key=f"cv_{label_suffix}")
-    
-    # 新增：产品特色备注 (用于记录图片里的那些亮点)
-    remarks = st.sidebar.text_area(f"特色/备注 ({label_suffix})", height=100, placeholder="例如: 20% Co-insurance 折扣, 基因测试...", key=f"rem_{label_suffix}")
-    
-    total_cost = premium * years
-    return name, type_, premium, years, total_cost, coverage, cash_value, remarks
-
-# 获取两份保单的数据
-name_a, type_a, prem_a, year_a, total_a, cov_a, cv_a, rem_a = user_input_features("A")
-st.sidebar.markdown("---")
-name_b, type_b, prem_b, year_b, total_b, cov_b, cv_b, rem_b = user_input_features("B")
-
-# --- 主界面：分析报告 ---
-
-# 动态标题
-title_text = f"为 {client_name} 定制的保障分析报告" if client_name else "智能保单对比分析"
-st.title(f"📊 {title_text}")
-st.caption(f"顾问: {consultant_name} | 日期: {datetime.now().strftime('%Y-%m-%d')}")
-st.markdown("---")
-
-# 1. 核心数据对比卡片
-col1, col2 = st.columns(2)
-
-with col1:
-    st.info(f"📋 **{name_a}**")
-    st.metric("总投入成本", f"RM {total_a:,.0f}", delta=f"年缴 RM {prem_a:,.0f}")
-    st.metric("保障额度 (Limit/Sum Assured)", f"RM {cov_a:,.0f}")
-    if rem_a:
-        st.markdown(f"**亮点:** {rem_a}")
-
-with col2:
-    st.success(f"📋 **{name_b}**")
-    st.metric("总投入成本", f"RM {total_b:,.0f}", delta=f"年缴 RM {prem_b:,.0f}")
-    st.metric("保障额度 (Limit/Sum Assured)", f"RM {cov_b:,.0f}")
-    if rem_b:
-        st.markdown(f"**亮点:** {rem_b}")
-
-st.markdown("---")
-
-# 2. 详细对比表格
-st.subheader("🔎 详细参数横向测评")
-
-# 计算数据
-profit_a = cv_a - (prem_a * min(20, year_a))
-profit_b = cv_b - (prem_b * min(20, year_b))
-
-comparison_data = {
-    "对比维度": ["产品类型", "缴费年限", "年缴保费", "累计总保费", "保障额度", "现金价值/奖励", "特色备注"],
-    f"{name_a}": [type_a, f"{year_a} 年", f"RM {prem_a:,.0f}", f"RM {total_a:,.0f}", f"RM {cov_a:,.0f}", f"RM {cv_a:,.0f}", rem_a],
-    f"{name_b}": [type_b, f"{year_b} 年", f"RM {prem_b:,.0f}", f"RM {total_b:,.0f}", f"RM {cov_b:,.0f}", f"RM {cv_b:,.0f}", rem_b]
+# --- 1. 语言包配置 (Language Config) ---
+TRANSLATIONS = {
+    "cn": {
+        "title": "🛡️ 客户保单年度检视报告",
+        "sidebar_title": "🔧 工具箱",
+        "lang_select": "选择语言 (Language)",
+        "client_profile": "👤 客户档案",
+        "client_name": "客户姓名",
+        "client_age": "年龄",
+        "add_policy_header": "➕ 添加保单",
+        "policy_name": "保单名称/计划",
+        "policy_company": "保险公司",
+        "policy_type": "险种类型",
+        "premium": "年缴保费 (RM)",
+        "coverage": "保障额度 (RM)",
+        "sustainability": "保单持久性 (可维持至多少岁)",
+        "max_age": "最高续保年龄 (至多少岁)",
+        "remarks": "备注 (如: 无理赔奖励/缺口)",
+        "add_btn": "📥 添加此保单到列表",
+        "clear_btn": "🗑️ 清空所有保单",
+        "report_header": "📊 年度检视分析",
+        "total_premium": "年度总保费支出",
+        "total_coverage": "总身故/重疾保障",
+        "table_header": "🔎 现有保单明细",
+        "chart_title": "各保单投入 vs 保障分析",
+        "download_header": "💾 保存/下载",
+        "download_btn": "📥 下载检视报告 (Excel/CSV)",
+        "footer": "专业顾问年度服务 | Generated by E&S Agency Tool",
+        "types": ["医疗卡 (Medical)", "人寿/重疾 (Life/CI)", "储蓄/年金 (Savings)", "意外 (PA)"],
+        "empty_msg": "👈 请在左侧侧边栏添加保单以生成报告。"
+    },
+    "en": {
+        "title": "🛡️ Annual Policy Review Report",
+        "sidebar_title": "🔧 Toolbox",
+        "lang_select": "Language",
+        "client_profile": "👤 Client Profile",
+        "client_name": "Client Name",
+        "client_age": "Age",
+        "add_policy_header": "➕ Add Policy",
+        "policy_name": "Policy Name/Plan",
+        "policy_company": "Company",
+        "policy_type": "Policy Type",
+        "premium": "Annual Premium (RM)",
+        "coverage": "Coverage Amount (RM)",
+        "sustainability": "Sustainability (Up to Age)",
+        "max_age": "Max Coverage Age",
+        "remarks": "Remarks (e.g. NCB/Gaps)",
+        "add_btn": "📥 Add to List",
+        "clear_btn": "🗑️ Clear All",
+        "report_header": "📊 Review Analysis",
+        "total_premium": "Total Annual Premium",
+        "total_coverage": "Total Life/CI Coverage",
+        "table_header": "🔎 Policy Details",
+        "chart_title": "Premium vs Coverage Analysis",
+        "download_header": "💾 Save Report",
+        "download_btn": "📥 Download Report (Excel/CSV)",
+        "footer": "Professional Annual Review | Generated by E&S Agency Tool",
+        "types": ["Medical", "Life/CI", "Savings", "PA"],
+        "empty_msg": "👈 Please add policies from the sidebar to generate report."
+    }
 }
 
-df = pd.DataFrame(comparison_data)
-st.table(df)
+st.set_page_config(page_title="Policy Review Tool", page_icon="📝", layout="wide")
 
-# 3. 可视化分析
-st.subheader("📈 视觉化分析")
-tab1, tab2 = st.tabs(["💰 资金与保障", "🕸️ 综合优势雷达"])
+# --- 2. 初始化 Session State (用于存储多张保单) ---
+if 'policies' not in st.session_state:
+    st.session_state.policies = []
 
-with tab1:
-    chart_data = pd.DataFrame({
-        "方案": [name_a, name_a, name_b, name_b],
-        "类型": ["总保费 (Cost)", "保障额度 (Cover)", "总保费 (Cost)", "保障额度 (Cover)"],
-        "金额": [total_a, cov_a, total_b, cov_b]
-    })
-    fig_bar = px.bar(chart_data, x="方案", y="金额", color="类型", barmode="group", 
-                     title="投入 vs 保障 (RM)", text_auto='.2s', color_discrete_sequence=["#FF6B6B", "#4ECDC4"])
-    st.plotly_chart(fig_bar, use_container_width=True)
+# --- 3. 侧边栏：输入区 ---
+with st.sidebar:
+    # 语言选择
+    lang_code = st.radio("Language / 语言", ["中文", "English"], horizontal=True)
+    lang = "cn" if lang_code == "中文" else "en"
+    t = TRANSLATIONS[lang] # 获取当前语言的字典
 
-with tab2:
-    # 简单的雷达图评分逻辑
-    max_prem = max(prem_a, prem_b) if max(prem_a, prem_b) > 0 else 1
-    max_cov = max(cov_a, cov_b) if max(cov_a, cov_b) > 0 else 1
+    st.title(t["sidebar_title"])
     
-    def get_score(val, max_val, is_cost=False):
-        if is_cost: return (1 - (val / max_val)) * 100 if max_val > 0 else 0
-        return (val / max_val) * 100
+    # 客户资料
+    st.header(t["client_profile"])
+    c_name = st.text_input(t["client_name"], placeholder="Mr. / Ms.")
+    c_age = st.number_input(t["client_age"], min_value=0, max_value=100, value=30)
     
-    categories = ['保费优势(越低越好)', '保障额度', '现金价值/奖励', '缴费轻松度']
+    st.markdown("---")
     
-    fig_radar = go.Figure()
-    fig_radar.add_trace(go.Scatterpolar(r=[
-        get_score(prem_a, max_prem, is_cost=True), get_score(cov_a, max_cov), 50, get_score(30-year_a, 30)
-    ], theta=categories, fill='toself', name=name_a))
+    # 添加保单表单
+    st.header(t["add_policy_header"])
     
-    fig_radar.add_trace(go.Scatterpolar(r=[
-        get_score(prem_b, max_prem, is_cost=True), get_score(cov_b, max_cov), 80, get_score(30-year_b, 30)
-    ], theta=categories, fill='toself', name=name_b))
-    
-    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])))
-    st.plotly_chart(fig_radar, use_container_width=True)
+    with st.form("add_policy_form", clear_on_submit=True):
+        p_name = st.text_input(t["policy_name"])
+        p_company = st.selectbox(t["policy_company"], ["Allianz", "AIA", "Prudential", "Great Eastern", "Zurich", "Hong Leong", "Other"])
+        p_type = st.selectbox(t["policy_type"], t["types"])
+        
+        col_sb1, col_sb2 = st.columns(2)
+        with col_sb1:
+            p_prem = st.number_input(t["premium"], min_value=0.0, step=100.0)
+            p_sust = st.number_input(t["sustainability"], min_value=0, max_value=100, help="Investment Linked Policy Sustainability")
+        with col_sb2:
+            p_cov = st.number_input(t["coverage"], min_value=0.0, step=1000.0)
+            p_max_age = st.number_input(t["max_age"], min_value=0, max_value=100, value=80)
+            
+        p_rem = st.text_area(t["remarks"], height=80)
+        
+        submitted = st.form_submit_button(t["add_btn"])
+        
+        if submitted:
+            if p_name:
+                st.session_state.policies.append({
+                    t["policy_name"]: p_name,
+                    t["policy_company"]: p_company,
+                    t["policy_type"]: p_type,
+                    t["premium"]: p_prem,
+                    t["coverage"]: p_cov,
+                    t["sustainability"]: p_sust if p_sust > 0 else "-", # 如果填0显示-
+                    t["max_age"]: p_max_age,
+                    t["remarks"]: p_rem
+                })
+                st.success("✅ Added!")
+            else:
+                st.error("Please enter policy name.")
 
-# --- 保存功能 ---
+    # 清空按钮
+    if len(st.session_state.policies) > 0:
+        if st.button(t["clear_btn"]):
+            st.session_state.policies = []
+            st.rerun()
+
+# --- 4. 主界面：报告显示 ---
+st.title(f"{t['title']}")
+if c_name:
+    st.subheader(f"{t['client_profile']}: {c_name} ({c_age})")
+st.markdown(f"Date: {datetime.now().strftime('%Y-%m-%d')}")
 st.markdown("---")
-st.subheader("💾 保存客户档案")
 
-# 准备下载数据
-csv = df.to_csv(index=False).encode('utf-8')
-file_name_clean = f"{client_name}_保单分析.csv" if client_name else "保单分析_E&S.csv"
+# 如果还没有保单
+if len(st.session_state.policies) == 0:
+    st.info(t["empty_msg"])
 
-st.download_button(
-    label="📥 下载分析报告 (Excel/CSV)",
-    data=csv,
-    file_name=file_name_clean,
-    mime='text/csv',
-    help="点击下载将数据保存到您的设备"
-)
+else:
+    # 转换为 DataFrame
+    df = pd.DataFrame(st.session_state.policies)
+    
+    # 顶部关键指标卡片
+    col1, col2, col3 = st.columns(3)
+    total_prem = df[t["premium"]].sum()
+    total_cov = df[t["coverage"]].sum()
+    
+    with col1:
+        st.metric(label=t["total_premium"], value=f"RM {total_prem:,.0f}")
+    with col2:
+        st.metric(label=t["total_coverage"], value=f"RM {total_cov:,.0f}")
+    with col3:
+        st.metric(label="Total Policies", value=len(df))
+        
+    # --- 表格展示 ---
+    st.subheader(t["table_header"])
+    # 样式优化：高亮显示持久性和最高续保年龄
+    st.dataframe(
+        df, 
+        use_container_width=True, 
+        hide_index=True,
+        column_config={
+            t["premium"]: st.column_config.NumberColumn(format="RM %.0f"),
+            t["coverage"]: st.column_config.NumberColumn(format="RM %.0f"),
+        }
+    )
+    
+    # --- 图表分析 ---
+    st.subheader(t["chart_title"])
+    
+    # 柱状图：展示每份保单的保费 vs 保障
+    chart_df = df.melt(id_vars=[t["policy_name"]], value_vars=[t["premium"], t["coverage"]], var_name="Type", value_name="Value")
+    
+    fig = px.bar(
+        chart_df, 
+        x=t["policy_name"], 
+        y="Value", 
+        color="Type", 
+        barmode="group",
+        text_auto='.2s',
+        color_discrete_sequence=["#FF6B6B", "#4ECDC4"] # 红色代表保费，青色代表保障
+    )
+    fig.update_layout(xaxis_title="", yaxis_title="RM")
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # --- 散点图：持久性警告 (可选高级图表) ---
+    # 如果有填写持久性数据，显示一个简单的警告图
+    if pd.to_numeric(df[t["sustainability"]], errors='coerce').sum() > 0:
+        st.caption("⚠️ Sustainability Check (持久性检查)")
+        # 简单处理：过滤出有数字的行
+        sust_df = df[pd.to_numeric(df[t["sustainability"]], errors='coerce') > 0].copy()
+        if not sust_df.empty:
+            st.bar_chart(sust_df.set_index(t["policy_name"])[t["sustainability"]])
+            st.caption(f"* {t['sustainability']}")
 
-st.caption("Frankeez Lee  | Powered by Python Streamlit")
+    # --- 下载区域 ---
+    st.markdown("---")
+    st.subheader(t["download_header"])
+    
+    csv = df.to_csv(index=False).encode('utf-8')
+    file_name = f"Review_{c_name}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    st.download_button(
+        label=t["download_btn"],
+        data=csv,
+        file_name=file_name,
+        mime='text/csv'
+    )
+
+st.caption(t["footer"])
